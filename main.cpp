@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
 	};
 	struct edge_comp {
 		bool operator()(edge const& a, edge const& b) {
-			return a.w < b.w;
+			return a.w > b.w;
 		}
 	};
 	p.reset(n);
