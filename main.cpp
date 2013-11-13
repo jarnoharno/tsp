@@ -73,9 +73,11 @@ int main(int argc, char *argv[])
 		cout << "can't read edge data" << endl;
 	}
 
-	// floyd warshall
+	// floyd warshall with path reconstruction
+	// optimization ideas: symmetricity, johnson's algorithm
 	cout << "calculating shortest paths..." << endl;
 	sq_matrix dist(adj);
+	sq_matrix next(n, -1);
 	for (int i = 0; i < n; ++i) {
 		dist(i, i) = 0;
 	}
@@ -86,6 +88,7 @@ int main(int argc, char *argv[])
 				// check for overflow (max + max == -2)
 				if (w > 0 && w < inf && dist(i, j) > w) {
 					dist(i, j) = w;
+					next(i, j) = k;
 				}
 			}
 		}
