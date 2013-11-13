@@ -100,10 +100,10 @@ int main(int argc, char *argv[])
 	// read adjacency matrix
 	ifstream f(argv[1]);
 	if (!f.is_open()) {
-		cerr << "can't open file " << argv << endl;
+		cerr << "can't open file " << argv[1] << argv << endl;
 		return 0;
 	}
-	cerr << "reading graph data..." << endl;
+	cerr << "reading graph data from file " << argv[1] << "..." << endl;
 	int n, en;
 	f >> n;
 	f >> en;
@@ -256,6 +256,3 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
-
-
-
