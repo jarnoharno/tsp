@@ -37,6 +37,27 @@ struct sq_matrix {
 	}
 };
 
+struct progress {
+	int n;
+	int p;
+	int i;
+	void stop() {
+		cout << "\r         \r";
+	}
+	void reset(int n) {
+		this->n = n;
+		this->p = -1;
+		this->i = -1;
+	}
+	void operator()() {
+		int q = 100 * ++i / n;
+		if (q == p)
+			return;
+		p = q;
+		cout << '\r' << p << "% done";
+	}
+};
+
 void usage()
 {
 	cout << "usage: tsp input" << endl;
@@ -56,19 +77,23 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 	cout << "reading graph data..." << endl;
-	int n, edges;
+	int n, en;
 	f >> n;
-	f >> edges;
+	f >> en;
 	if (f.fail()) {
 		cout << "can't read number of vertices/edges" << endl;
 	}
 	sq_matrix adj(n, inf);
-	for (int i = 0; i < edges; ++i) {
+	progress p;
+	p.reset(en);
+	for (int i = 0; i < en; ++i) {
+		p();
 		int u, v, w;
 		f >> u >> v >> w;
 		adj(u, v) = w;
 		adj(v, u) = w;
 	}
+	p.stop();
 	if (f.fail()) {
 		cout << "can't read edge data" << endl;
 	}
@@ -81,7 +106,9 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < n; ++i) {
 		dist(i, i) = 0;
 	}
+	p.reset(n);
 	for (int k = 0; k < n; ++k) {
+		p();
 		for (int i = 0; i < n; ++i) {
 			for (int j = 0; j < n; ++j) {
 				int w = dist(i, k) + dist(k, j);
@@ -93,6 +120,7 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
+	cout << "\r         \r";
 	// check negative cycles
 	for (int i = 0; i < n; ++i) {
 		if (dist(i, i) != 0) {
