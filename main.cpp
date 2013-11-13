@@ -98,8 +98,8 @@ int main(int argc, char *argv[])
 		cout << "can't read edge data" << endl;
 	}
 
-	// floyd warshall with path reconstruction
-	// optimization ideas: symmetricity, johnson's algorithm
+	// symmetric floyd warshall with path reconstruction
+	// optimization ideas: johnson's algorithm, memory optimization
 	cout << "calculating shortest paths..." << endl;
 	sq_matrix dist(adj);
 	sq_matrix next(n, -1);
@@ -110,17 +110,16 @@ int main(int argc, char *argv[])
 	for (int k = 0; k < n; ++k) {
 		p();
 		for (int i = 0; i < n; ++i) {
-			for (int j = 0; j < n; ++j) {
+			for (int j = 0; j <= i; ++j) {
 				int w = dist(i, k) + dist(k, j);
 				// check for overflow (max + max == -2)
 				if (w > 0 && w < inf && dist(i, j) > w) {
-					dist(i, j) = w;
-					next(i, j) = k;
+					dist(i, j) = dist(j, i) = w;
+					next(i, j) = next(j, i) = k;
 				}
 			}
 		}
 	}
-	cout << "\r         \r";
 	// check negative cycles
 	for (int i = 0; i < n; ++i) {
 		if (dist(i, i) != 0) {
@@ -129,6 +128,7 @@ int main(int argc, char *argv[])
 		}
 	}
 	// shortest paths graph satisfies triangle equality!
+	next.print();
 
 	return 0;
 }
