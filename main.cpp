@@ -94,7 +94,7 @@ struct shortest_paths {
 
 	inline void update(int i, int j, int ir, int jr, int k, int w) {
 		// check for overflow (max + max == -2)
-		if (w >= 0 && w < inf && m[ir + j] > w) {
+		if (w >= 0 && m[ir + j] > w) {
 			m[ir + j] = w;
 			m[jr + i] = k;
 		}
