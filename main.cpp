@@ -9,6 +9,8 @@
 #include <array>
 #include <stack>
 #include <cstring>
+#include <set>
+#include <random>
 
 using namespace std;
 static const int inf = numeric_limits<int>::max();
@@ -343,8 +345,6 @@ struct greedy_tsp {
 		sort_edges();
 		find_greedy();
 		align_edges();
-		// opt-2
-		find_opt2();
 	}
 
 	void print_tsp() {
@@ -453,13 +453,13 @@ struct mst_preorder_tsp {
 	}
 };
 
-struct cw_tsp {
+struct cw_edge_comp {
+	bool operator()(edge const& a, edge const& b) {
+		return a.w < b.w;
+	}
+};
 
-	struct cw_edge_comp {
-		bool operator()(edge const& a, edge const& b) {
-			return a.w < b.w;
-		}
-	};
+struct cw_tsp {
 
 	// local variables
 	shortest_paths const& sp;
@@ -546,9 +546,200 @@ struct cw_tsp {
 	}
 };
 
+struct random_greedy_tsp {
+
+	// local variables
+	shortest_paths const& sp;
+	typedef multiset<edge, cw_edge_comp> queue;
+	queue q;
+
+	vector<neighbors> ns;
+
+	// random generator
+	std::default_random_engine generator;
+	std::uniform_int_distribution<int> distribution;
+
+	random_greedy_tsp(shortest_paths const& sp, int variance) : sp(sp), ns(sp.n), generator(1), distribution(0, variance - 1) {}
+
+	void sort_edges() {
+		cerr << "sorting edges..." << endl;
+		progress p(sp.n);
+		for (int i = 0; i < sp.n; ++i) {
+			p();
+			for (int j = 0; j < i; ++j) {
+				q.insert(edge(sp.dist(i, j), i, j));
+			}
+		}
+	}
+
+	void find_random_greedy() {
+		cerr << "constructing greedy tsp..." << endl;
+		progress p(q.size());
+		while (!q.empty()) {
+			p();
+
+			// choose rth best
+			int r = distribution(generator);
+			queue::iterator ei = q.begin();
+			for (int i = 0; i < r; ++i) {
+				if (++ei == q.end()) {
+					ei = q.begin();
+				}
+			}
+			edge e(*ei);
+			q.erase(ei);
+
+			// check degree
+			if (ns[e.i].d == 2 || ns[e.j].d == 2)
+				continue;
+			// check cycles smaller than n
+			int p = e.j;
+			int i = e.i;
+			int k = 0;
+			for (;;) {
+				if (++k == sp.n || i == -1) {
+					ns[e.i].add(e.j);
+					ns[e.j].add(e.i);
+					break;
+				}
+				if (i == e.j) {
+					break;
+				}
+				// next
+				if (ns[i][0] == p) {
+					p = i;
+					i = ns[i][1];
+				}
+				else {
+					p = i;
+					i = ns[i][0];
+				}
+			}
+		}
+	}
+
+	void align_edges() {
+		int i = 0;
+		int j = ns[0][1];
+		while (j != 0) {
+			if (ns[j][0] != i) {
+				ns[j].flip();
+			}
+			i = j;
+			j = ns[j][1];
+		}
+	}
+
+	// assuming that ns is a cycle
+
+	bool incident(int i, int j) {
+		return i == j || i == ns[j][1] || i == ns[j][0];
+	}
+
+	void flip_path(int i, int j) {
+		while (i != j) {
+			ns[i].flip();
+			i = ns[i][0];
+		}
+	}
+
+	bool find_opt2_(int i, int e) {
+		int j = ns[ns[i][1]][1];
+		while (!incident(j, e)) {
+			if (sp.dist(i, ns[i][1]) + sp.dist(j, ns[j][1]) >
+				sp.dist(i, j) + sp.dist(ns[i][1], ns[j][1])) {
+				int i2 = ns[i][1];
+				ns[ns[i][1]][0] = ns[j][1];
+				ns[ns[j][1]][0] = ns[i][1];
+				ns[i][1] = j;
+				ns[j][1] = i;
+				flip_path(i2, i);
+				return true;
+			}
+			j = ns[j][1];
+		}
+		return false;
+	}
+
+	void find_opt2() {
+		int e = 0;
+		int i = ns[0][1];
+		while (i != e) {
+			if (find_opt2_(i, e)) {
+				e = i;
+			}
+			i = ns[i][1];
+		}
+		// went full
+	}
+
+	void clear_path() {
+		for (int i = 0; i < sp.n; ++i) {
+			ns[i] = neighbors();
+		}
+	}
+
+	void calculate_tsp(int repeat) {
+		int best = inf;
+		vector<neighbors> best_path;
+		for (int i = 0; i < repeat; ++i) {
+			sort_edges();
+			find_random_greedy();
+			align_edges();
+			find_opt2();
+			int l = length();
+			cerr << l << endl;
+			if (l < best) {
+				best = l;
+				best_path = ns;
+			}
+			clear_path();
+		}
+		ns = best_path;
+	}
+
+	void print_tsp() {
+		// travel path and print to stdout
+		cerr << "printing output..." << endl;
+		int length = 0;
+		int i = 0;
+		int j = ns[0][1];
+		while (j != 0) {
+			length += sp.dist(i, j);
+			sp.print_path(i, j);
+			if (ns[j][0] == i) {
+				i = j;
+				j = ns[j][1];
+			}
+			else {
+				i = j;
+				j = ns[j][0];
+			}
+		}
+		length += sp.dist(i, j);
+		sp.print_path(i, j);
+		cout << j << endl;
+
+		cerr << "total length: " << length << endl;
+	}
+
+	int length() const {
+		int length = 0;
+		int i = 0;
+		int j = ns[0][1];
+		while (j != 0) {
+			length += sp.dist(i, j);
+			i = j;
+			j = ns[j][1];
+		}
+		length += sp.dist(i, j);
+		return length;
+	}
+};
+
 void usage()
 {
-	cerr << "usage: tsp method input" << endl;
+	cerr << "usage: tsp input method [variance repeats]" << endl;
 }
 
 int main(int argc, char const *argv[])
@@ -559,22 +750,37 @@ int main(int argc, char const *argv[])
 	}
 
 	shortest_paths sp;
-	if (!sp.load_file(argv[2]) || 
+	if (!sp.load_file(argv[1]) || 
 		!sp.calculate_shortest_paths()) {
 		return 0;
 	}
 
-	if (strcmp(argv[1], "greedy") == 0) {
+	if (strcmp(argv[2], "greedy") == 0) {
 		greedy_tsp greedy(sp);
 		greedy.calculate_tsp();
 		greedy.print_tsp();
 	}
-	else if (strcmp(argv[1], "mstp") == 0) {
+	else if (strcmp(argv[2], "greedyopt2") == 0) {
+		greedy_tsp greedy(sp);
+		greedy.calculate_tsp();
+		greedy.find_opt2();
+		greedy.print_tsp();
+	}
+	else if (strcmp(argv[2], "rndgreedyopt2") == 0) {
+		if (argc < 5) {
+			usage();
+			return 0;
+		}
+		random_greedy_tsp greedy(sp, atoi(argv[3]));
+		greedy.calculate_tsp(atoi(argv[4]));
+		greedy.print_tsp();
+	}
+	else if (strcmp(argv[2], "mstp") == 0) {
 		mst_preorder_tsp mstp(sp);
 		mstp.calculate_tsp();
 		mstp.print_tsp();
 	}
-	else if (strcmp(argv[1], "cw") == 0) {
+	else if (strcmp(argv[2], "cw") == 0) {
 		cw_tsp cw(sp);
 		cw.calculate_tsp();
 		cw.print_tsp();
