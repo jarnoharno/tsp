@@ -217,8 +217,14 @@ struct neighbors {
 	inline void add(int k) {
 		n[d++] = k;
 	}
-	inline int operator[](int i) {
+	inline int& operator[](int i) {
 		return n[i];
+	}
+	inline int const& operator[](int i) const {
+		return n[i];
+	}
+	inline void flip() {
+		swap(n[0], n[1]);
 	}
 };
 
@@ -278,9 +284,67 @@ struct greedy_tsp {
 		}
 	}
 
+	void align_edges() {
+		int i = 0;
+		int j = ns[0][1];
+		while (j != 0) {
+			if (ns[j][0] != i) {
+				ns[j].flip();
+			}
+			i = j;
+			j = ns[j][1];
+		}
+	}
+
+	// assuming that ns is a cycle
+
+	bool incident(int i, int j) {
+		return i == j || i == ns[j][1] || i == ns[j][0];
+	}
+
+	void flip_path(int i, int j) {
+		while (i != j) {
+			ns[i].flip();
+			i = ns[i][0];
+		}
+	}
+
+	bool find_opt2_(int i, int e) {
+		int j = ns[ns[i][1]][1];
+		while (!incident(j, e)) {
+			if (sp.dist(i, ns[i][1]) + sp.dist(j, ns[j][1]) >
+				sp.dist(i, j) + sp.dist(ns[i][1], ns[j][1])) {
+				int i2 = ns[i][1];
+				ns[ns[i][1]][0] = ns[j][1];
+				ns[ns[j][1]][0] = ns[i][1];
+				ns[i][1] = j;
+				ns[j][1] = i;
+				flip_path(i2, i);
+				return true;
+			}
+			j = ns[j][1];
+		}
+		return false;
+	}
+
+	void find_opt2() {
+		int e = 0;
+		int i = ns[0][1];
+		while (i != e) {
+			if (find_opt2_(i, e)) {
+				e = i;
+			}
+			i = ns[i][1];
+		}
+		// went full
+	}
+
 	void calculate_tsp() {
 		sort_edges();
 		find_greedy();
+		align_edges();
+		// opt-2
+		find_opt2();
 	}
 
 	void print_tsp() {
@@ -306,6 +370,19 @@ struct greedy_tsp {
 		cout << j << endl;
 
 		cerr << "total length: " << length << endl;
+	}
+
+	int length() const {
+		int length = 0;
+		int i = 0;
+		int j = ns[0][1];
+		while (j != 0) {
+			length += sp.dist(i, j);
+			i = j;
+			j = ns[j][1];
+		}
+		length += sp.dist(i, j);
+		return length;
 	}
 };
 
