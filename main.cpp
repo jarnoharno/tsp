@@ -6,6 +6,9 @@
 #include <limits>
 #include <queue>
 #include <tuple>
+#include <array>
+#include <stack>
+#include <cstring>
 
 using namespace std;
 static const int inf = numeric_limits<int>::max();
@@ -36,11 +39,6 @@ struct progress {
 		cerr << '\r' << p << "% done";
 	}
 };
-
-void usage()
-{
-	cerr << "usage: tsp input" << endl;
-}
 
 struct shortest_paths {
 	int n;
@@ -200,43 +198,38 @@ struct shortest_paths {
 	}
 };
 
-struct tsp_greedy {
+// helper structs
+struct edge {
+	int w;
+	int i;
+	int j;
+	edge(int w, int i, int j) : w(w), i(i), j(j) {}
+};
+struct edge_comp {
+	bool operator()(edge const& a, edge const& b) {
+		return a.w > b.w;
+	}
+};
+struct neighbors {
+	int d;
+	array<int, 2> n;
+	neighbors() : d(0), n{{-1, -1}} {} // zomg c++11
+	inline void add(int k) {
+		n[d++] = k;
+	}
+	inline int operator[](int i) {
+		return n[i];
+	}
+};
 
-	// helper structs
-	struct edge {
-		int w;
-		int i;
-		int j;
-		edge(int w, int i, int j) : w(w), i(i), j(j) {}
-	};
-	struct edge_comp {
-		bool operator()(edge const& a, edge const& b) {
-			return a.w > b.w;
-		}
-	};
-	struct neighbors {
-		int i;
-		int j;
-		neighbors() : i(-1), j(-1) {}
-		int degree() {
-			return (i == -1 ? 0 : 1) + (j == -1 ? 0 : 1);
-		}
-		void add(int k) {
-			if (i == -1) {
-				i = k;
-			}
-			else if (j == -1) {
-				j = k;
-			}
-		}
-	};
+struct greedy_tsp {
 
 	// local variables
 	shortest_paths const& sp;
 	priority_queue<edge, vector<edge>, edge_comp> q;
 	vector<neighbors> ns;
 
-	tsp_greedy(shortest_paths const& sp) : sp(sp), ns(sp.n) {}
+	greedy_tsp(shortest_paths const& sp) : sp(sp), ns(sp.n) {}
 
 	void sort_edges() {
 		cerr << "sorting edges..." << endl;
@@ -257,7 +250,7 @@ struct tsp_greedy {
 			edge e(q.top());
 			q.pop();
 			// check degree
-			if (ns[e.i].degree() == 2 || ns[e.j].degree() == 2)
+			if (ns[e.i].d == 2 || ns[e.j].d == 2)
 				continue;
 			// check cycles smaller than n
 			int p = e.j;
@@ -273,13 +266,13 @@ struct tsp_greedy {
 					break;
 				}
 				// next
-				if (ns[i].i == p) {
+				if (ns[i][0] == p) {
 					p = i;
-					i = ns[i].j;
+					i = ns[i][1];
 				}
 				else {
 					p = i;
-					i = ns[i].i;
+					i = ns[i][0];
 				}
 			}
 		}
@@ -295,17 +288,17 @@ struct tsp_greedy {
 		cerr << "printing output..." << endl;
 		int length = 0;
 		int i = 0;
-		int j = ns[0].j;
+		int j = ns[0][1];
 		while (j != 0) {
 			length += sp.dist(i, j);
 			sp.print_path(i, j);
-			if (ns[j].i == i) {
+			if (ns[j][0] == i) {
 				i = j;
-				j = ns[j].j;
+				j = ns[j][1];
 			}
 			else {
 				i = j;
-				j = ns[j].i;
+				j = ns[j][0];
 			}
 		}
 		length += sp.dist(i, j);
@@ -316,22 +309,199 @@ struct tsp_greedy {
 	}
 };
 
+struct mst_preorder_tsp {
+	// local variables
+	shortest_paths const& sp;
+	// adjacency list
+	vector<vector<int>> mst;
+	priority_queue<edge, vector<edge>, edge_comp> q;
+
+	mst_preorder_tsp(shortest_paths const& sp) : sp(sp), mst(sp.n) {}
+
+	void queue_children(int v, int prev) {
+		mst[v].push_back(prev);
+		mst[prev].push_back(v);
+		for (int i = 0; i < sp.n; ++i) {
+			if (mst[i].size() == 0) {
+				q.push(edge(sp.dist(v, i), v, i));
+			}
+		}
+	}
+
+	void find_mst() {
+		// prim
+		for (int i = 1; i < sp.n; ++i) {
+			q.push(edge(sp.dist(0, i), 0, i));
+		}
+		while (!q.empty()) {
+			edge e(q.top());
+			q.pop();
+			if (mst[e.i].size() == 0) {
+				queue_children(e.i, e.j);
+			}
+			else if (mst[e.j].size() == 0) {
+				queue_children(e.j, e.i);
+			}
+		}
+		// mst is minimum spanning tree now
+	}
+
+	void calculate_tsp() {
+		find_mst();
+	}
+
+	int length;
+	
+	int print_preorder_(int v, int parent) {
+		int prev = v;
+		for (int i = 0; i < mst[v].size(); ++i) {
+			if (mst[v][i] != parent) {
+				length += sp.dist(prev, mst[v][i]);
+				sp.print_path(prev, mst[v][i]);
+				prev = print_preorder_(mst[v][i], v);
+			}
+		}
+		return prev;
+	}
+
+	void print_tsp() {
+		// print mst in preorder
+		length = 0;
+		int last = print_preorder_(0, -1);
+		length += sp.dist(last, 0);
+		sp.print_path(last, 0);
+		cout << 0 << endl;
+
+		cerr << "total length: " << length << endl;
+	}
+};
+
+struct cw_tsp {
+
+	struct cw_edge_comp {
+		bool operator()(edge const& a, edge const& b) {
+			return a.w < b.w;
+		}
+	};
+
+	// local variables
+	shortest_paths const& sp;
+	priority_queue<edge, vector<edge>, cw_edge_comp> q;
+	vector<neighbors> ns;
+
+	cw_tsp(shortest_paths const& sp) : sp(sp), ns(sp.n) {}
+
+	void calculate_tsp() {
+		for (int i = 1; i < sp.n; ++i) {
+			for (int j = 1; j < i; ++j) {
+				q.push(edge(sp.dist(0, i) + sp.dist(0, j) - sp.dist(i, j), i, j));
+			}
+		}
+		int n = 2;
+		while (n < sp.n && !q.empty()) {
+			edge e(q.top());
+			q.pop();
+			// check degree
+			if (ns[e.i].d == 2 || ns[e.j].d == 2)
+				continue;
+			// check cycles
+			int p = e.j;
+			int i = e.i;
+			for (;;) {
+				// no cycles, add
+				if (i == -1) {
+					ns[e.i].add(e.j);
+					ns[e.j].add(e.i);
+					++n;
+					break;
+				}
+				// cycle, discard
+				if (i == e.j) {
+					break;
+				}
+				// next
+				if (ns[i][0] == p) {
+					p = i;
+					i = ns[i][1];
+				}
+				else {
+					p = i;
+					i = ns[i][0];
+				}
+			}
+		}
+		// extract last two
+		while (!q.empty()) {
+			edge e(q.top());
+			q.pop();
+			if (ns[e.i].d != 2 && ns[e.j].d != 2) {
+				ns[0].add(e.i);
+				ns[0].add(e.j);
+				ns[e.i].add(0);
+				ns[e.j].add(0);
+			}
+		}
+	}
+
+	void print_tsp() {
+		// travel path and print to stdout
+		cerr << "printing output..." << endl;
+		int length = 0;
+		int i = 0;
+		int j = ns[0][1];
+		while (j != 0) {
+			length += sp.dist(i, j);
+			sp.print_path(i, j);
+			if (ns[j][0] == i) {
+				i = j;
+				j = ns[j][1];
+			}
+			else {
+				i = j;
+				j = ns[j][0];
+			}
+		}
+		length += sp.dist(i, j);
+		sp.print_path(i, j);
+		cout << j << endl;
+
+		cerr << "total length: " << length << endl;
+	}
+};
+
+void usage()
+{
+	cerr << "usage: tsp method input" << endl;
+}
+
 int main(int argc, char const *argv[])
 {
-	if (argc < 2) {
+	if (argc < 3) {
 		usage();
 		return 0;
 	}
 
 	shortest_paths sp;
-	if (!sp.load_file(argv[1]) || 
+	if (!sp.load_file(argv[2]) || 
 		!sp.calculate_shortest_paths()) {
 		return 0;
 	}
 
-	tsp_greedy greedy(sp);
-	greedy.calculate_tsp();
-	greedy.print_tsp();
+	if (strcmp(argv[1], "greedy") == 0) {
+		greedy_tsp greedy(sp);
+		greedy.calculate_tsp();
+		greedy.print_tsp();
+	}
+	else if (strcmp(argv[1], "mstp") == 0) {
+		mst_preorder_tsp mstp(sp);
+		mstp.calculate_tsp();
+		mstp.print_tsp();
+	}
+	else if (strcmp(argv[1], "cw") == 0) {
+		cw_tsp cw(sp);
+		cw.calculate_tsp();
+		cw.print_tsp();
+	}
 
 	return 0;
 }
